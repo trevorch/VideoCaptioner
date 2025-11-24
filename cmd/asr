@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-ASR命令行工具 - 音频文件语音识别
-支持剪映和必剪两种ASR引擎
+ASR命令行工具 - 视频文件语音识别
+支持剪映和必剪两种ASR引擎，自动将MP4转换为MP3后进行识别
 """
 
 import argparse
 import os
 import sys
-
+import tempfile
+from pathlib import Path
 
 # 获取当前脚本的绝对路径，并找到项目根目录
 current_script_dir = os.path.dirname(os.path.abspath(__file__))  # 这是cmd目录
 project_root_dir = os.path.dirname(current_script_dir)           # 这是项目根目录
-#print(project_root_dir)
-#app_dir = os.path.join(project_root_dir, 'app')         # 拼接出app目录的路径
-
 
 # 将根目录添加到模块搜索路径
 sys.path.append(project_root_dir) 
@@ -30,31 +28,90 @@ except ImportError as e:
     print("请确保ASR模块可用")
     sys.exit(1)
 
+def extract_audio_from_video(video_path, audio_path=None):
+    """
+    从视频文件中提取音频并保存为MP3格式
+    
+    Args:
+        video_path: 输入视频文件路径
+        audio_path: 输出音频文件路径（可选，默认为临时文件）
+    
+    Returns:
+        str: 生成的音频文件路径
+    """
+    try:
+        # 动态导入moviepy，避免在不需要转换时成为必需依赖
+        try:
+            from moviepy import VideoFileClip
+        except ImportError:
+            print("错误：需要安装moviepy库来进行视频转音频转换")
+            print("请运行: pip install moviepy")
+            sys.exit(1)
+        
+        # 如果未提供音频路径，创建临时文件
+        if audio_path is None:
+            temp_dir = tempfile.gettempdir()
+            base_name = Path(video_path).stem
+            audio_path = os.path.join(temp_dir, f"{base_name}_extracted_audio.mp3")
+        
+        print(f"正在从视频提取音频: {video_path} -> {audio_path}")
+        
+        # 提取音频
+        video_clip = VideoFileClip(video_path)
+        audio_clip = video_clip.audio
+        
+        # 写入音频文件
+        audio_clip.write_audiofile(audio_path)
+        
+        # 关闭剪辑以释放资源
+        audio_clip.close()
+        video_clip.close()
+        
+        print(f"音频提取完成: {audio_path}")
+        return audio_path
+        
+    except Exception as e:
+        raise Exception(f"视频转音频失败: {str(e)}")
+
+def is_video_file(file_path):
+    """检查文件是否为视频格式"""
+    video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v'}
+    return Path(file_path).suffix.lower() in video_extensions
+
+def is_audio_file(file_path):
+    """检查文件是否为音频格式"""
+    audio_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma'}
+    return Path(file_path).suffix.lower() in audio_extensions
+
 def main():
     """主函数：处理命令行参数并执行ASR转换"""
     parser = argparse.ArgumentParser(
-        description='音频文件语音识别工具',
+        description='视频文件语音识别工具 - 自动提取音频后进行识别',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f'''
 使用示例:
-  %(prog)s /sdcard/Audio/audio.mp3
-  %(prog)s /sdcard/Audio/audio.mp3 --engine jianying --format srt
-  %(prog)s /sdcard/Audio/audio.mp3 -o /sdcard/Output --format both
+  %(prog)s /sdcard/Videos/video.mp4
+  %(prog)s /sdcard/Videos/video.mp4 --engine jianying --format srt
+  %(prog)s /sdcard/Videos/video.mp4 -o /sdcard/Output --format both
+  %(prog)s /sdcard/Audio/audio.mp3  # 也支持直接处理音频文件
+  
+支持视频格式: mp4, avi, mov, mkv, wmv, flv, webm, m4v
+支持音频格式: mp3, wav, m4a, flac, aac, ogg, wma
         '''
     )
     
-    # 必须参数：音频文件路径
+    # 必须参数：媒体文件路径
     parser.add_argument(
-        'audio_file', 
+        'media_file', 
         type=str, 
-        help='要处理的音频文件路径'
+        help='要处理的视频或音频文件路径'
     )
     
     # 可选参数：输出目录
     parser.add_argument(
         '-o', '--output', 
         type=str, 
-        help='输出文件目录（默认与音频文件同目录）'
+        help='输出文件目录（默认与媒体文件同目录）'
     )
     
     # 可选参数：ASR引擎选择
@@ -75,6 +132,20 @@ def main():
         help='输出格式：srt、tt或both（两者都输出），默认为both'
     )
     
+    # 可选参数：是否保留临时音频文件
+    parser.add_argument(
+        '--keep-audio',
+        action='store_true',
+        help='保留提取的临时音频文件（用于调试）'
+    )
+    
+    # 可选参数：自定义音频输出路径
+    parser.add_argument(
+        '--audio-output',
+        type=str,
+        help='指定提取的音频文件保存路径（如不指定则使用临时文件）'
+    )
+    
     # 可选参数：详细输出
     parser.add_argument(
         '-v', '--verbose',
@@ -85,15 +156,15 @@ def main():
     # 解析命令行参数
     args = parser.parse_args()
     
-    # 检查音频文件是否存在
-    if not os.path.exists(args.audio_file):
-        print(f"错误：音频文件 '{args.audio_file}' 不存在")
+    # 检查媒体文件是否存在
+    if not os.path.exists(args.media_file):
+        print(f"错误：媒体文件 '{args.media_file}' 不存在")
         sys.exit(1)
     
     # 确定输出目录
-    output_dir = args.output if args.output else os.path.dirname(args.audio_file)
+    output_dir = args.output if args.output else os.path.dirname(args.media_file)
     if output_dir == '':
-        output_dir = '.'  # 如果音频文件在当前目录，输出目录设为当前目录
+        output_dir = '.'  # 如果媒体文件在当前目录，输出目录设为当前目录
     
     # 确保输出目录存在
     if output_dir and not os.path.exists(output_dir):
@@ -102,19 +173,49 @@ def main():
             print(f"创建输出目录: {output_dir}")
     
     # 提取文件名（不含扩展名）
-    base_name = os.path.splitext(os.path.basename(args.audio_file))[0]
+    base_name = os.path.splitext(os.path.basename(args.media_file))[0]
+    
+    # 处理临时文件
+    temp_audio_path = None
+    audio_file_to_process = args.media_file
     
     try:
+        # 检查文件类型并相应处理
+        if is_video_file(args.media_file):
+            if args.verbose:
+                print(f"检测到视频文件: {args.media_file}")
+            
+            # 提取音频
+            audio_output = args.audio_output
+            if audio_output is None and not args.keep_audio:
+                # 创建临时文件
+                temp_dir = tempfile.gettempdir()
+                audio_output = os.path.join(temp_dir, f"{base_name}_temp_{os.getpid()}.mp3")
+                temp_audio_path = audio_output
+            
+            audio_file_to_process = extract_audio_from_video(args.media_file, audio_output)
+            
+        elif is_audio_file(args.media_file):
+            if args.verbose:
+                print(f"检测到音频文件: {args.media_file}")
+            # 直接使用音频文件
+            audio_file_to_process = args.media_file
+            
+        else:
+            print(f"错误：不支持的文件格式 '{args.media_file}'")
+            print("请提供视频文件（mp4, avi, mov等）或音频文件（mp3, wav等）")
+            sys.exit(1)
+        
         if args.verbose:
-            print(f"开始处理音频文件: {args.audio_file}")
+            print(f"开始处理音频文件: {audio_file_to_process}")
             print(f"使用ASR引擎: {args.engine}")
             print(f"输出目录: {output_dir}")
         
         # 根据选择的引擎初始化ASR
         if args.engine == 'jianying':
-            asr = JianYingASR(args.audio_file)
+            asr = JianYingASR(audio_file_to_process)
         else:  # bcut
-            asr = BcutASR(args.audio_file)
+            asr = BcutASR(audio_file_to_process)
         
         # 运行语音识别
         if args.verbose:
@@ -150,6 +251,16 @@ def main():
             import traceback
             traceback.print_exc()
         sys.exit(1)
+    
+    finally:
+        # 清理临时文件
+        if temp_audio_path and os.path.exists(temp_audio_path) and not args.keep_audio:
+            try:
+                    os.remove(temp_audio_path)
+                    if args.verbose:
+                        print(f"已清理临时音频文件: {temp_audio_path}")
+            except:
+                    pass  # 忽略清理错误
 
 if __name__ == '__main__':
     main()
