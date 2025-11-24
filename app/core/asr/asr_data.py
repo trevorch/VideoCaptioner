@@ -242,8 +242,39 @@ class ASRData:
                 json.dump(self.to_json(), f, ensure_ascii=False)
         elif save_path.endswith(".ass"):
             self.to_ass(save_path=save_path, style_str=ass_style, layout=layout)
+        elif save_path.endswith(".tt"):
+            self.to_time_txt(save_path=save_path)
         else:
             raise ValueError(f"Unsupported file extension: {save_path}")
+
+    def format_milliseconds(self, ms):
+        """通过数学计算将毫秒转换为 HH:mm:ss 格式"""
+        seconds_total = ms // 1000  # 总秒数
+        hours = seconds_total // 3600
+        minutes = (seconds_total % 3600) // 60
+        seconds = seconds_total % 60
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}" # 格式化为两位，不足补零
+        
+    def to_time_txt(
+        self,
+        save_path=None,
+    ) -> str:
+        """Convert to SRT subtitle format"""
+        lines = []
+        for n, seg in enumerate(self.segments, 1):
+            original = seg.text
+            translated = seg.translated_text
+            text = translated if translated else original
+
+            lines.append(f"{self.format_milliseconds(seg.start_time)}|{text}\n")
+
+        rs = "\n".join(lines)
+        if save_path:
+            save_path = handle_long_path(save_path)
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(rs)
+        return rs
+
 
     def to_txt(
         self,

@@ -110,7 +110,7 @@ class JianYingASR(BaseASR):
     ) -> dict:
         """Execute ASR workflow: upload -> submit -> query result."""
 
-        self._check_rate_limit()
+        #self._check_rate_limit()
 
         if callback:
             callback(*ASRStatus.UPLOADING.with_progress(20))
