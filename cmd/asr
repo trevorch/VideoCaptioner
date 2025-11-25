@@ -5,6 +5,8 @@ ASR命令行工具 - 视频文件语音识别
 """
 
 import argparse
+import subprocess
+import shutil
 import os
 import sys
 import tempfile
@@ -28,50 +30,73 @@ except ImportError as e:
     print("请确保ASR模块可用")
     sys.exit(1)
 
+def check_ffmpeg():
+    """
+    检查系统是否安装了 ffmpeg 和 ffprobe
+    """
+    def _has(cmd):
+        try:
+            subprocess.run([cmd, "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            return True
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            return False
+
+    if not _has("ffmpeg"):
+        print("错误：未找到 ffmpeg，请先安装 ffmpeg 并将其加入 PATH。")
+        print("安装参考：https://ffmpeg.org/download.html")
+        sys.exit(1)
+    if not _has("ffprobe"):
+        print("错误：未找到 ffprobe，请先安装 ffmpeg（包含 ffprobe）并将其加入 PATH。")
+        sys.exit(1)
+
+
 def extract_audio_from_video(video_path, audio_path=None):
     """
-    从视频文件中提取音频并保存为MP3格式
-    
-    Args:
-        video_path: 输入视频文件路径
-        audio_path: 输出音频文件路径（可选，默认为临时文件）
-    
-    Returns:
-        str: 生成的音频文件路径
+    使用 FFmpeg 从视频中提取音频并保存为 MP3（最低质量）
     """
     try:
-        # 动态导入moviepy，避免在不需要转换时成为必需依赖
-        try:
-            from moviepy import VideoFileClip
-        except ImportError:
-            print("错误：需要安装moviepy库来进行视频转音频转换")
-            print("请运行: pip install moviepy")
-            sys.exit(1)
-        
-        # 如果未提供音频路径，创建临时文件
+        import subprocess
+        import shutil
+
+        check_ffmpeg()
+
         if audio_path is None:
             temp_dir = tempfile.gettempdir()
             base_name = Path(video_path).stem
             audio_path = os.path.join(temp_dir, f"{base_name}_extracted_audio.mp3")
-        
-        print(f"正在从视频提取音频: {video_path} -> {audio_path}")
-        
-        # 提取音频
-        video_clip = VideoFileClip(video_path)
-        audio_clip = video_clip.audio
-        
-        # 写入音频文件
-        audio_clip.write_audiofile(audio_path)
-        
-        # 关闭剪辑以释放资源
-        audio_clip.close()
-        video_clip.close()
-        
+
+        print(f"正在从视频提取音频（最低质量）: {video_path} -> {audio_path}")
+
+        # 若目标已存在，先删除以避免 ffmpeg 交互式询问
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+
+        # 最低质量参数：8 kbps CBR、单声道、16 kHz、MP3
+        cmd = [
+            "ffmpeg", "-y", "-i", video_path,
+            "-vn",                    # 去除视频流
+            "-acodec", "libmp3lame",   # 使用 LAME MP3 编码器
+            "-b:a", "10k",             # 恒定码率 8 kbps（最低常用质量）
+            "-ar", "16000",           # 采样率 16 kHz
+            "-ac", "1",               # 单声道
+            "-write_xing", "0",        # 不写 Xing/Info 头（减小体积、避免部分解析器警告）
+            audio_path
+        ]
+
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+        if not os.path.exists(audio_path):
+            raise Exception("FFmpeg 执行成功但未生成输出文件，请检查输入文件与权限。")
+
         print(f"音频提取完成: {audio_path}")
         return audio_path
-        
+
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr.decode("utf-8", errors="ignore") if e.stderr else str(e)
+        raise Exception(f"FFmpeg 音频提取失败：{err_msg}") from e
     except Exception as e:
         raise Exception(f"视频转音频失败: {str(e)}")
+
 
 def is_video_file(file_path):
     """检查文件是否为视频格式"""
