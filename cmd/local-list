@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+
+import os
+import json
+import hashlib
+from datetime import datetime
+
+def get_file_md5_10chars(file_name):
+    """计算文件名的MD5值，并返回前10个字符"""
+    md5_hash = hashlib.md5(file_name.encode('utf-8')).hexdigest()
+    return md5_hash[:10]
+
+def get_creation_time(file_path):
+    """获取文件的创建时间，并格式化为YYYYMMDD HH:mm:ss"""
+    timestamp = os.path.getctime(file_path)
+    dt = datetime.fromtimestamp(timestamp)
+    return dt.strftime('%Y%m%d %H:%M:%S')
+
+def get_timestamp_ms(file_path):
+    """获取文件的最后修改时间戳，并转换为毫秒（整数）"""
+    timestamp_seconds = os.path.getmtime(file_path)
+    return int(timestamp_seconds * 1000)
+
+def process_seal_directory():
+    current_dir = os.getcwd() 
+    # 同时包含MP4和WEBM文件
+    video_files = [f for f in os.listdir(current_dir) 
+                  if f.lower().endswith(('.mp4', '.webm'))]
+    result = []
+
+    dir_name_lower = os.path.basename(current_dir).lower() if os.path.exists(current_dir) else ''
+
+    for file_name in video_files:
+        file_path = os.path.join(current_dir, file_name)
+        if not os.path.isfile(file_path):
+            continue
+
+        file_id = get_file_md5_10chars(file_name)
+        timestamp_ms = get_timestamp_ms(file_path)
+        #date_str = get_creation_time(file_path)
+        urls_entry = f"local/{file_name}" if dir_name_lower else ""
+
+        base_name = os.path.splitext(file_name)[0]
+
+        json_obj = {
+            "id": base_name,
+            "timestamp": timestamp_ms,
+            "date": file_id,
+            "urls": [urls_entry] if urls_entry else [],
+            "hasSrt": False,
+            "dsource":"local"
+        }
+        result.append(json_obj)
+
+    return result
+
+def main():
+    video_data = process_seal_directory()
+
+    output_filename = 'video.json'
+    with open(output_filename, 'w', encoding='utf-8') as f:
+        json.dump(video_data, f, indent=2, ensure_ascii=False)
+
+    print(f"✅ 已生成文件：{output_filename}，共包含 {len(video_data)} 个视频文件的信息。")
+
+if __name__ == '__main__':
+    main()

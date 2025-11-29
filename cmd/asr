@@ -152,9 +152,9 @@ def main():
     parser.add_argument(
         '--format', 
         type=str, 
-        choices=['srt', 'tt', 'both'], 
+        choices=['srt','json', 'md', 'all'], 
         default='both',
-        help='输出格式：srt、tt或both（两者都输出），默认为both'
+        help='输出格式：srt、json,md或all，默认为all'
     )
     
     # 可选参数：是否保留临时音频文件
@@ -250,19 +250,23 @@ def main():
         # 根据选择的格式输出文件
         output_files = []
         
-        if args.format in ['srt', 'both']:
-            srt_path = os.path.join(output_dir, f"{base_name}.srt")
-            result.save(srt_path)
-            output_files.append(srt_path)
-            if args.verbose:
-                print(f"SRT文件已保存至: {srt_path}")
-        
-        if args.format in ['tt', 'both']:
-            tt_path = os.path.join(output_dir, f"{base_name}.tt")
-            result.save(tt_path)
-            output_files.append(tt_path)
-            if args.verbose:
-                print(f"TT文件已保存至: {tt_path}")
+        srt_path = os.path.join(output_dir, f"{base_name}.srt")
+        result.save(srt_path)
+        output_files.append(srt_path)
+        if args.verbose:
+            print(f"SRT文件已保存至: {srt_path}")
+                
+        md_path = os.path.join(output_dir, f"{base_name}.md")
+        result.save(md_path)
+        output_files.append(md_path)
+        if args.verbose:
+            print(f"MD文件已保存至: {md_path}")
+            
+        json_path = os.path.join(output_dir, f"srts/{base_name}.json")
+        result.save(json_path)
+        output_files.append(json_path)
+        if args.verbose:
+            print(f"JSON文件已保存至: {json_path}")
         
         # 输出成功信息
         print("语音识别处理完成！")

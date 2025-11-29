@@ -238,11 +238,12 @@ class ASRData:
         elif save_path.endswith(".txt"):
             self.to_txt(save_path=save_path, layout=layout)
         elif save_path.endswith(".json"):
-            with open(save_path, "w", encoding="utf-8") as f:
-                json.dump(self.to_json(), f, ensure_ascii=False)
+            #with open(save_path, "w", encoding="utf-8") as f:
+                #json.dump(self.to_json(), f, ensure_ascii=False)
+            self.to_time_json(save_path=save_path)
         elif save_path.endswith(".ass"):
             self.to_ass(save_path=save_path, style_str=ass_style, layout=layout)
-        elif save_path.endswith(".tt"):
+        elif save_path.endswith(".md"):
             self.to_time_txt(save_path=save_path)
         else:
             raise ValueError(f"Unsupported file extension: {save_path}")
@@ -275,7 +276,28 @@ class ASRData:
                 f.write(rs)
         return rs
 
+    def to_time_json(
+        self,
+        save_path=None,
+    ) -> str:
+        """Convert to JSON subtitle format"""
+        json_data = []
+        for n, seg in enumerate(self.segments, 1):
+            original = seg.text
+            translated = seg.translated_text
+            text = translated if translated else original
 
+            json_data.append({
+                'time': self.format_milliseconds(seg.start_time),
+                'text': text
+            })
+              
+        if save_path:
+            save_path = handle_long_path(save_path)
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, ensure_ascii=False, indent=2)
+        return json_data
+        
     def to_txt(
         self,
         save_path=None,
